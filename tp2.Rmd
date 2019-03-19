@@ -1,0 +1,196 @@
+---
+title: "tp2_Rendu"
+author: "Boukercha Sarra"
+date: "28 janvier 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+# Explication du problème :
+De nos jours, les applications s'adaptent aux besoins de ces utilisateurs ergonomie, performances et faisabilités.. Pour garantir la fidélité des consommateurs.
+# Présentation de la solution proposée :
+
+Dans le cadre de notre Tp nous disposant d'un event log d'une application de paiement bancaire dans le but d'identifier le processus le plus frequament utilisé au cour de l'utilisation de l'application 
+
+# Détails techniques de la méthode:
+Process Mining rend l'analyse de processus à nouveau pertinente. Process Mining utilise les données générées des systèmes. Il peut générer automatiquement des modèles de processus réels avec des fréquences et des mesures de performance . De plus, les modèles de processus permettent d'identifier facilement tous les problèmes de conformité à la fois.
+# Résultat :
+
+```{r}
+library(bupaR)
+library(edeaR)
+library(processmapR)
+library(eventdataR)
+#install.packages('tidyverse')
+library(tidyverse)
+library(readr)
+library(tidyverse)
+library(DiagrammeR)
+library(ggplot2)
+library(stringr)
+library(lubridate)
+
+credit<-read.csv(file=file.choose())
+```
+
+```{r}
+echant<-credit[1:1000,]
+
+```
+### Transformer les données eventlog 
+```{r}
+library("bupaR")
+credit$starttimestamp = as.POSIXct(credit$Start_Timestamp,tz="" ,
+                               format = "%Y/%m/%d %H:%M:%S.%OS")
+
+credit$endtimestamp = as.POSIXct(credit$Complete_Timestamp,
+                             format = "%Y/%m/%d %H:%M:%S.%OS")
+# remove blanks from var names
+names(credit) <- str_replace_all(names(credit), c(" " = "_" , "," = "" ))
+
+events <- bupaR::activities_to_eventlog(
+credit,
+case_id = 'Case_ID',
+activity_id = 'Activity',
+resource_id = 'Resource',
+timestamps = c('starttimestamp', 'endtimestamp'))
+```
+
+### Aperçu des Eventlog (summary)
+
+```{r}
+summary(events)
+```
+#### Interpretation :
+on a 800000 events, 57165 cas possible et 5256 traces.
+
+
+
+### Fréquence d'activités
+
+```{r}
+events %>% 
+  activity_frequency(level = "activity") 
+```
+
+```{r}
+events %>% 
+  activity_frequency(level = "activity") %>% 
+  plot()
+```
+#### Interpretation :
+ Les activitées les plus fréquentes O_Created , O_Create offer , O_sent(mail an online)
+
+
+### les processus où une activité doit être présente 
+
+
+```{r}
+events %>% 
+  filter_activity_presence(activities = c('A_Cancelled')) %>% 
+  activity_frequency(level = "activity") 
+```
+
+```{r}
+plt<-events %>% 
+  filter_activity_presence(activities = c('A_Cancelled')) %>% 
+  activity_frequency(level = "activity") 
+  plot(plt)
+```
+#### Interpretation :
+Les activités les plus présentes : O_Created O_Create offre , O_Cancelled 
+
+
+### Le graphe de la carte de processus
+
+```{r}
+library(DiagrammeRsvg)
+library(rsvg)
+events %>%
+  filter_activity_frequency(percentage = 1.0) %>% # show only most frequent activities
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  process_map(render = T)
+ 
+```
+#### Interpretation :
+On constate une liaison entre les activités qui nous mène a identifier le processus le plus utilisé par le client. 
+
+
+
+
+```{r}
+library(DiagrammeRsvg)
+library(rsvg)
+events %>%
+  filter_activity_frequency(percentage = 1.0) %>% # show only most frequent activities
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  process_map(performance(mean, "mins"),
+              render = T) 
+```
+
+## Matrice de la fréquence des suiveur d'activités 
+
+```{r}
+# precedent matrix ####
+precedence_matrix <- events %>%
+  filter_activity_frequency(percentage = 1.0) %>% # show only most frequent activities
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  precedence_matrix() %>% 
+  plot()
+plot(precedence_matrix)
+```
+#### Interpretation :
+Une autre methodes pour identitfier les activités et opérations qui son utilisé les uns aprés les autres
+## Trace d'activité   
+```{r}
+# trace explorer
+trace_explorer <- events %>%
+  trace_explorer(coverage = 0.7)
+plot(trace_explorer)
+```
+
+
+
+## le temps de traitement en heures par type d'application
+
+```{r}
+
+events %>%
+  filter_activity_frequency(percentage = 1.0) %>% # show only most frequent activities
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  group_by(X.case._ApplicationType) %>% 
+  throughput_time('log', units = 'hours')
+
+
+```
+#### Interpretation :
+L'activité la plus commune lors de l'utilisation de l'application est l'extraction d'un crédit bancaire 
+```{r}
+plott<-events %>%
+  filter_activity_frequency(percentage = 1.0) %>% # show only most frequent activities
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  group_by(X.case._ApplicationType) %>% 
+  throughput_time('log', units = 'hours')
+
+plot(plott)
+```
+
+
+```{r}
+events %>%
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  group_by(X.case._creditGoal) %>% 
+throughput_time('log', units = 'hours')
+```
+
+```{r}
+plot2<-events %>%
+  filter_trace_frequency(percentage = .80) %>%    # show only the most frequent traces
+  group_by(X.case._creditGoal) %>% 
+throughput_time('log', units = 'hours')
+plot(plot2)
+```
+#### Interpretation :
+ On constate que les crédits on servie essentiellement a l'améloration d'une maison ou l'achat d'une voiture ou payement d'un crédit pour maison . 
